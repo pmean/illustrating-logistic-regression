@@ -1,0 +1,36 @@
+---
+title: "Illustrating logistic regression"
+author: "Steve Simon"
+date: "July 10, 2017"
+output: html_document
+---
+
+A simple data set that will help you understand logistic regression is the Titanic data set. It has information on the survival of 1,313 passengers on the cruise ship, Titanic, that was hit by an iceberg and sunk in the North Atlantic during its maiden voyage. The disaster occured during an era where people really did believe in "women and children, first" though this was more true for first class passengers.
+
+I'm going to use a package from the tidyverse, readr, to get this data, though the regular read.table function included in R is more than up to the task of handling this small data set.
+
+```{r read-titanic-data}
+library("readr")
+library("magrittr")
+f <- "http://www.statsci.org/data/general/titanic.txt"
+ti <- read_tsv(f)
+names(ti) %<>% tolower
+head(ti)
+tail(ti)
+```
+
+So the very first question you might ask is whether women fared better than men. Here is a simple table.
+
+```{r titanic-table}
+tb <- table(ti$sex, ti$survived)
+print(tb)
+tb["male", "0"]
+```
+
+This table tells you that `r tb["female", "1"]` women survived, including Kate Winslet and that (spoiler alert!) `r tb["male", "0"]` men died, including, sadly, Leonardo DiCaprio.
+
+You can see right away that men in general fared worse than women. The ratio of deaths to survivals among men is `r tb["male", "0"]` / `r tb["male", "1"]` or `r tb["male", "0"]/tb["male", "1"]` to 1 odds in favor of death. Let's round this to `r round(tb["male", "0"]/tb["male", "1"])` to 1 odds.
+
+For women the ratio of survivals to deaths is `r tb["female", "1"]` / `r tb["female", "0"]` or exactly `r tb["female", "1"]/tb["female", "0"]` to 1 odds against death. This is a ten fold change in odds. You have increase the 2 to 1 odds against death by a facgtor of 2 to get to even (1 to 1) odds and then by a factor of 5 to get to the male odds of death.
+
+The ratio of odds is (not too surprisingly) called an odds ratio. The odds ratio is a commonly used measure in statistics, but it is not without a lot of controversy. But if you want to use a logistic regression model, you have to throw your lot in with the odds ratio. There are alternative regression approaches that use a different measure, such as the relative risk, but they are messier and used much less frequently.

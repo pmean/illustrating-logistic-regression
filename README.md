@@ -1,4 +1,4 @@
-# repository-title-goes-here
+# illustrating-logistic-regression
 
 This is a single file stand-alone application using R Markdown.
 
