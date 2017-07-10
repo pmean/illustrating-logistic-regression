@@ -61,13 +61,15 @@ Logistic regression in R for a simple bivariate case like sex versus survival wi
 
 ```{r logistic-model-for-sex}
 m1 <- glm(survived~sex, family=binomial(link=logit), data=ti)
-print(m1)
 summary(m1)
-plot(m1)
 ```
 
 ```{r broom}
 library(broom)
 glance(m1)
 tidy(m1)
+n <- data.frame(sex=sort(unique(ti$sex)))
+print(n)
+augment(m1, newdata=n)
+augment(m1, newdata=n, type.predict="response")
 ```
