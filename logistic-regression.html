@@ -168,10 +168,14 @@ print(tb)</code></pre>
 ##            0   1
 ##   female 154 308
 ##   male   709 142</code></pre>
-<pre class="r"><code>tb[&quot;male&quot;, &quot;0&quot;]</code></pre>
-<pre><code>## [1] 709</code></pre>
 <p>This table tells you that 308 women survived, including Kate Winslet and that (spoiler alert!) 709 men died, including, sadly, Leonardo DiCaprio.</p>
-<p>You can see right away that men in general fared worse than women. The ratio of deaths to survivals among men is 709 / 142 or 4.9929577 to 1 odds in favor of death. Let’s round this to 5 to 1 odds.</p>
+<p>The raw counts are sometimes difficult to interpret, especially since there were a lot more men than women making the trip from England to America. You can get percentages with the prop.table function. The argument margin=1 gives row percentages.</p>
+<pre class="r"><code>prop.table(tb, margin=1)</code></pre>
+<pre><code>##         
+##                  0         1
+##   female 0.3333333 0.6666667
+##   male   0.8331375 0.1668625</code></pre>
+<p>Looking at either the raw counts or the percentages, though, you can see that men in general fared worse than women. The ratio of deaths to survivals among men is 709 / 142 or 4.9929577 to 1 odds in favor of death. Let’s round this to 5 to 1 odds.</p>
 <p>For women the ratio of survivals to deaths is 308 / 154 or exactly 2 to 1 odds against death. This is a ten fold change in odds. You have increase the 2 to 1 odds against death by a factor of 2 to get to even (1 to 1) odds and then by a factor of 5 to get to the male odds of death.</p>
 <p>The ratio of odds is (not too surprisingly) called an odds ratio. The odds ratio is a commonly used measure in statistics, but it is not without a lot of controversy. But if you want to use a logistic regression model, you have to throw your lot in with the odds ratio. There are alternative regression approaches that use a different measure, such as the relative risk, but they are messier and used much less frequently.</p>
 <p>There is no function in R that will compute an odds ratio for you, though you could do the calculation yourself. The formula is a crossproduct, ad/bc, where a and d are the two numbers on the diagonal of the two by two table and b and c are the two numbers off the diagonal.</p>
@@ -233,8 +237,8 @@ oddsratio(ti$sex, ti$survived)</code></pre>
 ## attr(,&quot;method&quot;)
 ## [1] &quot;median-unbiased estimate &amp; mid-p exact CI&quot;</code></pre>
 <p>Logistic regression in R for a simple bivariate case like sex versus survival will produce the same odds ratios that we’ve seen earlier. You use the glm function in R (glm is short for general linear model, and logistic regression is a special case of the general linear model).</p>
-<pre class="r"><code>m1 &lt;- glm(survived~sex, family=binomial(link=logit), data=ti)
-summary(m1)</code></pre>
+<pre class="r"><code>msex &lt;- glm(survived~sex, family=binomial(link=logit), data=ti)
+summary(msex)</code></pre>
 <pre><code>## 
 ## Call:
 ## glm(formula = survived ~ sex, family = binomial(link = logit), 
@@ -258,27 +262,392 @@ summary(m1)</code></pre>
 ## AIC: 1359.5
 ## 
 ## Number of Fisher Scoring iterations: 4</code></pre>
+<p>The odds ratio doesn’t look like an odds ratio. By default, R (like many other statistical pacakges) reports the log odds ratio. You can extract this log odds ratio and exponentiate it to get an odds ratio, but it takes a bit of work to figure out how to extract the log odds ratio.</p>
+<pre class="r"><code>names(msex)</code></pre>
+<pre><code>##  [1] &quot;coefficients&quot;      &quot;residuals&quot;         &quot;fitted.values&quot;    
+##  [4] &quot;effects&quot;           &quot;R&quot;                 &quot;rank&quot;             
+##  [7] &quot;qr&quot;                &quot;family&quot;            &quot;linear.predictors&quot;
+## [10] &quot;deviance&quot;          &quot;aic&quot;               &quot;null.deviance&quot;    
+## [13] &quot;iter&quot;              &quot;weights&quot;           &quot;prior.weights&quot;    
+## [16] &quot;df.residual&quot;       &quot;df.null&quot;           &quot;y&quot;                
+## [19] &quot;converged&quot;         &quot;boundary&quot;          &quot;model&quot;            
+## [22] &quot;call&quot;              &quot;formula&quot;           &quot;terms&quot;            
+## [25] &quot;data&quot;              &quot;offset&quot;            &quot;control&quot;          
+## [28] &quot;method&quot;            &quot;contrasts&quot;         &quot;xlevels&quot;</code></pre>
+<pre class="r"><code>or &lt;- round(exp(msex$coefficients[&quot;sexmale&quot;]), 2)
+print(or)</code></pre>
+<pre><code>## sexmale 
+##     0.1</code></pre>
+<p>It gets worse when you need a standard error (e.g., for a confidence interval). You have to look not in the glm object but the summary of the glm object.</p>
+<pre class="r"><code>ssex &lt;- summary(msex)
+names(ssex)</code></pre>
+<pre><code>##  [1] &quot;call&quot;           &quot;terms&quot;          &quot;family&quot;         &quot;deviance&quot;      
+##  [5] &quot;aic&quot;            &quot;contrasts&quot;      &quot;df.residual&quot;    &quot;null.deviance&quot; 
+##  [9] &quot;df.null&quot;        &quot;iter&quot;           &quot;deviance.resid&quot; &quot;coefficients&quot;  
+## [13] &quot;aliased&quot;        &quot;dispersion&quot;     &quot;df&quot;             &quot;cov.unscaled&quot;  
+## [17] &quot;cov.scaled&quot;</code></pre>
+<pre class="r"><code>ssex$coefficients</code></pre>
+<pre><code>##               Estimate Std. Error    z value     Pr(&gt;|z|)
+## (Intercept)  0.6931472 0.09869274   7.023285 2.167120e-12
+## sexmale     -2.3011756 0.13488123 -17.060755 2.907732e-65</code></pre>
+<pre class="r"><code>mn &lt;- ssex$coefficients[&quot;sexmale&quot;, &quot;Estimate&quot;]
+se &lt;- ssex$coefficients[&quot;sexmale&quot;, &quot;Std. Error&quot;]
+conf.limits &lt;- round(exp(mn+c(-1.96,1.96)*se), 2)
+print(conf.limits)</code></pre>
+<pre><code>## [1] 0.08 0.13</code></pre>
+<p>You will find useful functions like coef() and predict() if you search through the help files, but in general, extracting information from a logistic regression model (or any regression model for that matter) is difficult.</p>
+<p>There is a “tidyverse” package, broom, written by David Robinson, that makes extraction of these objects a bit easier. The nice thing about broom is that it provides a more or less uniform approach for extracting information that works across a wide variety of models.</p>
+<p>The glance function in broom gives a one line summary of key statistics.</p>
 <pre class="r"><code>library(broom)
-glance(m1)</code></pre>
+glance(msex)</code></pre>
 <pre><code>##   null.deviance df.null    logLik      AIC      BIC deviance df.residual
 ## 1      1688.065    1312 -677.7653 1359.531 1369.891 1355.531        1311</code></pre>
-<pre class="r"><code>tidy(m1)</code></pre>
+<p>The tidy function gives a tabular summary that, for most statistical models, has one row for each independent variable (plus a row for the intercept, usually).</p>
+<pre class="r"><code>tidy(msex)</code></pre>
 <pre><code>##          term   estimate  std.error  statistic      p.value
 ## 1 (Intercept)  0.6931472 0.09869274   7.023285 2.167120e-12
 ## 2     sexmale -2.3011756 0.13488123 -17.060755 2.907732e-65</code></pre>
+<p>The augment function adds predicted values and/or residuals to a data frame.</p>
 <pre class="r"><code>n &lt;- data.frame(sex=sort(unique(ti$sex)))
 print(n)</code></pre>
 <pre><code>##      sex
 ## 1 female
 ## 2   male</code></pre>
-<pre class="r"><code>augment(m1, newdata=n)</code></pre>
+<pre class="r"><code>augment(msex, newdata=n)</code></pre>
 <pre><code>##      sex    .fitted    .se.fit
 ## 1 female  0.6931472 0.09869274
 ## 2   male -1.6080285 0.09193852</code></pre>
-<pre class="r"><code>augment(m1, newdata=n, type.predict=&quot;response&quot;)</code></pre>
+<p>The default predicted value is a log odds, and with a bit of work, you can convert this to a predicted probability. But life is too short for that. Tell broom to convert for you.</p>
+<pre class="r"><code>augment(msex, newdata=n, type.predict=&quot;response&quot;)</code></pre>
 <pre><code>##      sex   .fitted    .se.fit
 ## 1 female 0.6666667 0.02193172
 ## 2   male 0.1668625 0.01278124</code></pre>
+<p>Logistic regression with a continuous independent variable is not much more complicated, though the example you will see in just a minute has a few twists and turns.</p>
+<p>Let’s plunge ahead and fit a model without looking at any graphs first. The first twist is that some of the ages are missing. The simplest thing to do, though it may not be the best choice, is to remove any row where age is missing.</p>
+<pre class="r"><code>summary(ti$age)</code></pre>
+<pre><code>##    Min. 1st Qu.  Median    Mean 3rd Qu.    Max.    NA's 
+##    0.17   21.00   28.00   30.40   39.00   71.00     557</code></pre>
+<pre class="r"><code>tj &lt;- ti[is.finite(ti$age), ]
+mage &lt;- glm(survived~age, family=binomial, data=tj)
+tage &lt;- tidy(mage)
+tage$lcl &lt;- exp(tage$estimate-1.96*tage$std.error)
+tage$ucl &lt;- exp(tage$estimate+1.96*tage$std.error)
+tage$estimate &lt;- exp(tage$estimate)
+tage[ , c(&quot;term&quot;, &quot;estimate&quot;, &quot;lcl&quot;, &quot;ucl&quot;)]</code></pre>
+<pre><code>##          term  estimate       lcl      ucl
+## 1 (Intercept) 0.9217992 0.6556050 1.296076
+## 2         age 0.9912439 0.9811318 1.001460</code></pre>
+<pre class="r"><code>or &lt;- tage$estimate[tage$term==&quot;age&quot;]
+n &lt;- data.frame(age=1:71)
+page &lt;- augment(mage, newdata=n, type.predict=&quot;response&quot;)
+print(page)</code></pre>
+<pre><code>##    age   .fitted    .se.fit
+## 1    1 0.4774597 0.04219956
+## 2    2 0.4752659 0.04101270
+## 3    3 0.4730732 0.03983369
+## 4    4 0.4708814 0.03866340
+## 5    5 0.4686908 0.03750280
+## 6    6 0.4665014 0.03635295
+## 7    7 0.4643132 0.03521500
+## 8    8 0.4621265 0.03409025
+## 9    9 0.4599412 0.03298010
+## 10  10 0.4577574 0.03188613
+## 11  11 0.4555753 0.03081009
+## 12  12 0.4533949 0.02975392
+## 13  13 0.4512162 0.02871976
+## 14  14 0.4490394 0.02771004
+## 15  15 0.4468646 0.02672742
+## 16  16 0.4446918 0.02577487
+## 17  17 0.4425211 0.02485570
+## 18  18 0.4403526 0.02397353
+## 19  19 0.4381864 0.02313236
+## 20  20 0.4360226 0.02233653
+## 21  21 0.4338611 0.02159074
+## 22  22 0.4317022 0.02089996
+## 23  23 0.4295459 0.02026940
+## 24  24 0.4273923 0.01970436
+## 25  25 0.4252414 0.01921010
+## 26  26 0.4230933 0.01879165
+## 27  27 0.4209481 0.01845354
+## 28  28 0.4188059 0.01819959
+## 29  29 0.4166668 0.01803264
+## 30  30 0.4145308 0.01795437
+## 31  31 0.4123980 0.01796516
+## 32  32 0.4102685 0.01806404
+## 33  33 0.4081423 0.01824873
+## 34  34 0.4060196 0.01851580
+## 35  35 0.4039004 0.01886088
+## 36  36 0.4017848 0.01927889
+## 37  37 0.3996728 0.01976430
+## 38  38 0.3975645 0.02031140
+## 39  39 0.3954600 0.02091443
+## 40  40 0.3933595 0.02156782
+## 41  41 0.3912628 0.02226623
+## 42  42 0.3891701 0.02300469
+## 43  43 0.3870816 0.02377859
+## 44  44 0.3849971 0.02458370
+## 45  45 0.3829169 0.02541622
+## 46  46 0.3808410 0.02627269
+## 47  47 0.3787694 0.02715002
+## 48  48 0.3767022 0.02804542
+## 49  49 0.3746395 0.02895640
+## 50  50 0.3725813 0.02988076
+## 51  51 0.3705278 0.03081650
+## 52  52 0.3684789 0.03176184
+## 53  53 0.3664347 0.03271520
+## 54  54 0.3643954 0.03367515
+## 55  55 0.3623609 0.03464040
+## 56  56 0.3603313 0.03560981
+## 57  57 0.3583067 0.03658233
+## 58  58 0.3562871 0.03755703
+## 59  59 0.3542727 0.03853305
+## 60  60 0.3522634 0.03950962
+## 61  61 0.3502593 0.04048605
+## 62  62 0.3482605 0.04146169
+## 63  63 0.3462670 0.04243595
+## 64  64 0.3442789 0.04340831
+## 65  65 0.3422962 0.04437826
+## 66  66 0.3403191 0.04534535
+## 67  67 0.3383474 0.04630918
+## 68  68 0.3363814 0.04726934
+## 69  69 0.3344210 0.04822549
+## 70  70 0.3324663 0.04917730
+## 71  71 0.3305174 0.05012445</code></pre>
+<pre class="r"><code>plot(page$age, page$.fitted, type=&quot;l&quot;)</code></pre>
+<p><img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAABUAAAAPACAMAAADDuCPrAAAAWlBMVEUAAAAAADoAAGYAOjoAOpAAZpAAZrY6AAA6OgA6kJA6kLY6kNtmAABmAGZmZjpmtv+QOgCQkDqQ2/+2ZgC2kDq2/7a2///bkDrb////tmb/25D//7b//9v////UriLrAAAACXBIWXMAAB2HAAAdhwGP5fFlAAAgAElEQVR4nO3d7YLaVpegUZJJ29PjzNgdukNwXPd/m4MECFFAFdpIOvtIa/2JU28K9svHYx30weYNgJBN6QEAaiWgAEECChAkoABBAgoQJKAAQQIKECSgAEECChAkoABBAgoQJKAAQQIKECSgAEECChAkoABBAgoQJKAAQQIKECSgAEECChAkoABBAgoQJKAAQQIKECSgAEECChAkoABBAgoQJKAAQQIKECSgAEECChAkoABBAgoQJKAAQQIKECSgAEECChAkoABBAgoQJKAAQQIKECSgAEECChAkoABBAgoQJKAAQQIKECSgAEECChAkoABBAgoQJKAAQQIKECSgAEECChAkoABBAgoQJKAAQQIKECSgAEECChAkoABBAgoQJKAAQQIKECSgAEECChAkoABBAgoQJKAAQQIKECSgAEECChAkoABBAgoQJKAAQQIKECSgAEECChAkoABBAgoQJKAAQQIKECSgAEECChAkoABBAgoQJKAAQQIKECSgAEECChAkoABBAgoQJKAAQQIKECSgAEECChAkoABBAgoQJKAAQQIKECSgAEECChAkoABBAgoQJKAAQQIKECSgAEECChAkoABBAgoQJKAAQQIKECSgAEECChAkoABBAgoQJKAAQQIKECSgAEECChAkoABBAgoQJKAAQQIKECSgAEECChAkoABBAgoQJKAAQQIKECSgAEECChAkoABBAgoQJKAAQQIKECSgAEECChAkoABBAgoQJKAAQQIKECSgAEECChAkoABBAgoQJKAAQQIKECSgAEECChAkoABBAgoQlDugG4DRjJ+o0W9xRKUfbWBZRm/U2Dc4pgn+wgBWS0ABggQUIEhAAYIEFCBIQAGCBBQgSEABggQUIEhAAYIEFCBIQAGCBBQgSEABggQUIEhAAYIEFCBIQAGCBBQgSEABggQUIEhAH/6Xqf+PAAkI6MP/UkGBjwnoB/+thAIfEdCP/mMJBT4goB//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" width="672" /></p>
+<p>There are so many different values for age, that it is easy to get confused. What is happening, though, is that each year of age causes a slight reduction (0.991) in the odds of survival. The change is easier to understand if you cumulate it across a decade of life. Each increase of ten years leads to a 0.991^10 or 0.916 decrease in the odds of survival.</p>
+<p>There’s a big problem, though. Although there is a slight protective trend in survival in favor of children, the trend does not persist among adults. There are a couple of ways to look at this. First, let’s split the data into deciles (ten groups).</p>
+<pre class="r"><code>library(&quot;dplyr&quot;)</code></pre>
+<pre><code>## 
+## Attaching package: 'dplyr'</code></pre>
+<pre><code>## The following objects are masked from 'package:stats':
+## 
+##     filter, lag</code></pre>
+<pre><code>## The following objects are masked from 'package:base':
+## 
+##     intersect, setdiff, setequal, union</code></pre>
+<pre class="r"><code>age_group &lt;- ntile(tj$age, 10)
+range_label &lt;- function(x) {
+  paste(min(x), &quot;to&quot;, max(x))
+}
+table(age_group)</code></pre>
+<pre><code>## age_group
+##  1  2  3  4  5  6  7  8  9 10 
+## 76 76 75 76 75 76 76 75 76 75</code></pre>
+<pre class="r"><code>tapply(tj$age, age_group, mean)</code></pre>
+<pre><code>##         1         2         3         4         5         6         7 
+##  6.932632 18.026316 21.053333 23.605263 26.640000 29.986842 34.210526 
+##         8         9        10 
+## 39.426667 46.552632 57.853333</code></pre>
+<pre class="r"><code>tapply(tj$age, age_group, range_label)</code></pre>
+<pre><code>##            1            2            3            4            5 
+## &quot;0.17 to 16&quot;   &quot;16 to 20&quot;   &quot;20 to 22&quot;   &quot;22 to 25&quot;   &quot;25 to 28&quot; 
+##            6            7            8            9           10 
+##   &quot;28 to 32&quot;   &quot;32 to 36&quot;   &quot;36 to 43&quot;   &quot;43 to 50&quot;   &quot;50 to 71&quot;</code></pre>
+<pre class="r"><code>tapply(tj$survived, age_group, mean)</code></pre>
+<pre><code>##         1         2         3         4         5         6         7 
+## 0.6447368 0.4473684 0.3200000 0.3684211 0.3466667 0.3026316 0.5000000 
+##         8         9        10 
+## 0.3333333 0.4342105 0.4400000</code></pre>
+<p>You could also split the data into year intervals that are evenly spaced.</p>
+<pre class="r"><code>library(&quot;dplyr&quot;)
+age_group &lt;- cut(tj$age, breaks=seq(0, 72, by=8))
+range_label &lt;- function(x) {
+  paste(min(x), &quot;to&quot;, max(x))
+}
+table(age_group)</code></pre>
+<pre><code>## age_group
+##   (0,8]  (8,16] (16,24] (24,32] (32,40] (40,48] (48,56] (56,64] (64,72] 
+##      46      37     205     180     114      83      51      32       8</code></pre>
+<pre class="r"><code>tapply(tj$age, age_group, mean)</code></pre>
+<pre><code>##     (0,8]    (8,16]   (16,24]   (24,32]   (32,40]   (40,48]   (48,56] 
+##  3.388696 13.054054 20.760976 28.333333 36.377193 44.698795 51.901961 
+##   (56,64]   (64,72] 
+## 60.406250 68.625000</code></pre>
+<pre class="r"><code>tapply(tj$age, age_group, range_label)</code></pre>
+<pre><code>##       (0,8]      (8,16]     (16,24]     (24,32]     (32,40]     (40,48] 
+## &quot;0.17 to 8&quot;   &quot;9 to 16&quot;  &quot;17 to 24&quot;  &quot;25 to 32&quot;  &quot;33 to 40&quot;  &quot;41 to 48&quot; 
+##     (48,56]     (56,64]     (64,72] 
+##  &quot;49 to 56&quot;  &quot;57 to 64&quot;  &quot;65 to 71&quot;</code></pre>
+<pre class="r"><code>tapply(tj$survived, age_group, mean)</code></pre>
+<pre><code>##     (0,8]    (8,16]   (16,24]   (24,32]   (32,40]   (40,48]   (48,56] 
+## 0.7608696 0.4594595 0.3804878 0.3388889 0.4298246 0.3855422 0.5294118 
+##   (56,64]   (64,72] 
+## 0.4062500 0.1250000</code></pre>
+<p>Now let’s look at a more complex logistic regression model with two factors, sex and passenger class. If you saw the movie, Leonardo and his third class compatriots were locked down until all the first class passengers boarded the life boats. That’s not good news on a rapidly sinking ship.</p>
+<p>You should look at passenger class by itself before thinking about how it might interact with sex.</p>
+<pre class="r"><code>prop.table(table(ti$pclass, ti$survived), margin=1)</code></pre>
+<pre><code>##      
+##               0         1
+##   1st 0.4006211 0.5993789
+##   2nd 0.5750000 0.4250000
+##   3rd 0.8059072 0.1940928</code></pre>
+<pre class="r"><code>oddsratio(ti$pclass, ti$survived)</code></pre>
+<pre><code>## $data
+##          Outcome
+## Predictor   0   1 Total
+##     1st   129 193   322
+##     2nd   161 119   280
+##     3rd   573 138   711
+##     Total 863 450  1313
+## 
+## $measure
+##          odds ratio with 95% C.I.
+## Predictor  estimate     lower     upper
+##       1st 1.0000000        NA        NA
+##       2nd 0.4948165 0.3566409 0.6844171
+##       3rd 0.1614237 0.1204184 0.2153400
+## 
+## $p.value
+##          two-sided
+## Predictor   midp.exact fisher.exact   chi.square
+##       1st           NA           NA           NA
+##       2nd 1.989474e-05 2.103202e-05 1.946566e-05
+##       3rd 0.000000e+00 4.887415e-37 3.055894e-38
+## 
+## $correction
+## [1] FALSE
+## 
+## attr(,&quot;method&quot;)
+## [1] &quot;median-unbiased estimate &amp; mid-p exact CI&quot;</code></pre>
+<pre class="r"><code>mclass &lt;- glm(survived~pclass, family=binomial, data=ti)
+tclass &lt;- tidy(mclass)
+tclass$lcl &lt;- round(exp(tclass$estimate-1.96*tclass$std.error), 2)
+tclass$ucl &lt;- round(exp(tclass$estimate+1.96*tclass$std.error), 2)
+tclass$estimate &lt;- round(exp(tclass$estimate), 2)
+tclass[, c(&quot;term&quot;, &quot;estimate&quot;, &quot;lcl&quot;, &quot;ucl&quot;)]</code></pre>
+<pre><code>##          term estimate  lcl  ucl
+## 1 (Intercept)     1.50 1.20 1.87
+## 2   pclass2nd     0.49 0.36 0.68
+## 3   pclass3rd     0.16 0.12 0.22</code></pre>
+<pre class="r"><code>n &lt;- data.frame(pclass=sort(unique(ti$pclass)))
+print(n)</code></pre>
+<pre><code>##   pclass
+## 1    1st
+## 2    2nd
+## 3    3rd</code></pre>
+<pre class="r"><code>augment(mclass, newdata=n, type.predict=&quot;response&quot;)</code></pre>
+<pre><code>##   pclass   .fitted    .se.fit
+## 1    1st 0.5993789 0.02730799
+## 2    2nd 0.4250000 0.02954264
+## 3    3rd 0.1940928 0.01483243</code></pre>
+<p>An interaction means that the effect of one independent variable is not the same across the levels of the other independent variable. In the Titanic example, an interaction between sex and passenger class means that the protection afforded to women by a “women and children first” policy is not the same across each passsenger class.</p>
+<pre class="r"><code>oddsratio(ti$sex[ti$pclass==&quot;1st&quot;], ti$survived[ti$pclass==&quot;1st&quot;], rev=&quot;rows&quot;)</code></pre>
+<pre><code>## $data
+##          Outcome
+## Predictor   0   1 Total
+##    male   120  59   179
+##    female   9 134   143
+##    Total  129 193   322
+## 
+## $measure
+##          odds ratio with 95% C.I.
+## Predictor estimate    lower    upper
+##    male    1.00000       NA       NA
+##    female 29.48543 14.69098 66.57353
+## 
+## $p.value
+##          two-sided
+## Predictor midp.exact fisher.exact   chi.square
+##    male           NA           NA           NA
+##    female          0 1.086515e-31 2.130831e-28
+## 
+## $correction
+## [1] FALSE
+## 
+## attr(,&quot;method&quot;)
+## [1] &quot;median-unbiased estimate &amp; mid-p exact CI&quot;</code></pre>
+<pre class="r"><code>oddsratio(ti$sex[ti$pclass==&quot;2nd&quot;], ti$survived[ti$pclass==&quot;2nd&quot;], rev=&quot;rows&quot;)</code></pre>
+<pre><code>## $data
+##          Outcome
+## Predictor   0   1 Total
+##    male   148  25   173
+##    female  13  94   107
+##    Total  161 119   280
+## 
+## $measure
+##          odds ratio with 95% C.I.
+## Predictor estimate    lower   upper
+##    male    1.00000       NA      NA
+##    female 41.49306 20.85644 88.8078
+## 
+## $p.value
+##          two-sided
+## Predictor midp.exact fisher.exact   chi.square
+##    male           NA           NA           NA
+##    female          0 5.079791e-36 1.473814e-33
+## 
+## $correction
+## [1] FALSE
+## 
+## attr(,&quot;method&quot;)
+## [1] &quot;median-unbiased estimate &amp; mid-p exact CI&quot;</code></pre>
+<pre class="r"><code>oddsratio(ti$sex[ti$pclass==&quot;3rd&quot;], ti$survived[ti$pclass==&quot;3rd&quot;], rev=&quot;rows&quot;)</code></pre>
+<pre><code>## $data
+##          Outcome
+## Predictor   0   1 Total
+##    male   441  58   499
+##    female 132  80   212
+##    Total  573 138   711
+## 
+## $measure
+##          odds ratio with 95% C.I.
+## Predictor estimate    lower    upper
+##    male   1.000000       NA       NA
+##    female 4.592543 3.115376 6.811806
+## 
+## $p.value
+##          two-sided
+## Predictor   midp.exact fisher.exact   chi.square
+##    male             NA           NA           NA
+##    female 1.110223e-14 1.184368e-14 8.043934e-16
+## 
+## $correction
+## [1] FALSE
+## 
+## attr(,&quot;method&quot;)
+## [1] &quot;median-unbiased estimate &amp; mid-p exact CI&quot;</code></pre>
+<p>You can see the sex effect is in the double digits for first and second class, but much smaller in third class.</p>
+<pre class="r"><code>mint &lt;- glm(survived~pclass*sex, family=binomial, data=ti)
+tint &lt;- tidy(mint)
+print(tint)</code></pre>
+<pre><code>##                term   estimate std.error  statistic      p.value
+## 1       (Intercept)  2.7006152 0.3443434  7.8427973 4.406190e-15
+## 2         pclass2nd -0.7222698 0.4540195 -1.5908342 1.116469e-01
+## 3         pclass3rd -3.2013905 0.3723548 -8.5976878 8.133818e-18
+## 4           sexmale -3.4105695 0.3792820 -8.9921733 2.423892e-19
+## 5 pclass2nd:sexmale -0.3461124 0.5274211 -0.6562354 5.116727e-01
+## 6 pclass3rd:sexmale  1.8827429 0.4282984  4.3958670 1.103315e-05</code></pre>
+<pre class="r"><code>tint$lcl &lt;- round(exp(tint$estimate-1.96*tint$std.error), 2)
+tint$ucl &lt;- round(exp(tint$estimate+1.96*tint$std.error), 2)
+tint$estimate &lt;- round(exp(tint$estimate), 2)
+tint[, c(&quot;term&quot;, &quot;estimate&quot;, &quot;lcl&quot;, &quot;ucl&quot;)]</code></pre>
+<pre><code>##                term estimate  lcl   ucl
+## 1       (Intercept)    14.89 7.58 29.24
+## 2         pclass2nd     0.49 0.20  1.18
+## 3         pclass3rd     0.04 0.02  0.08
+## 4           sexmale     0.03 0.02  0.07
+## 5 pclass2nd:sexmale     0.71 0.25  1.99
+## 6 pclass3rd:sexmale     6.57 2.84 15.21</code></pre>
+<pre class="r"><code>n1 &lt;- sort(unique(ti$sex))
+n2 &lt;- sort(unique(ti$pclass))
+n &lt;- data.frame(sex=rep(n1, length(n2)), pclass=rep(n2, each=length(n1)))
+print(n)</code></pre>
+<pre><code>##      sex pclass
+## 1 female    1st
+## 2   male    1st
+## 3 female    2nd
+## 4   male    2nd
+## 5 female    3rd
+## 6   male    3rd</code></pre>
+<pre class="r"><code>augment(mint, newdata=n, type.predict=&quot;response&quot;)</code></pre>
+<pre><code>##      sex pclass   .fitted    .se.fit
+## 1 female    1st 0.9370629 0.02030799
+## 2   male    1st 0.3296089 0.03513477
+## 3 female    2nd 0.8785047 0.03158348
+## 4   male    2nd 0.1445087 0.02673202
+## 5 female    3rd 0.3773585 0.03329110
+## 6   male    3rd 0.1162325 0.01434771</code></pre>
 
 
 

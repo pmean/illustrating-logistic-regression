@@ -24,12 +24,17 @@ So the very first question you might ask is whether women fared better than men.
 ```{r titanic-table}
 tb <- table(ti$sex, ti$survived)
 print(tb)
-tb["male", "0"]
 ```
 
 This table tells you that `r tb["female", "1"]` women survived, including Kate Winslet and that (spoiler alert!) `r tb["male", "0"]` men died, including, sadly, Leonardo DiCaprio.
 
-You can see right away that men in general fared worse than women. The ratio of deaths to survivals among men is `r tb["male", "0"]` / `r tb["male", "1"]` or `r tb["male", "0"]/tb["male", "1"]` to 1 odds in favor of death. Let's round this to `r round(tb["male", "0"]/tb["male", "1"])` to 1 odds.
+The raw counts are sometimes difficult to interpret, especially since there were a lot more men than women making the trip from England to America. You can get percentages with the prop.table function. The argument margin=1 gives row percentages.
+
+```{r proportions}
+prop.table(tb, margin=1)
+```
+
+Looking at either the raw counts or the percentages, though, you can see that men in general fared worse than women. The ratio of deaths to survivals among men is `r tb["male", "0"]` / `r tb["male", "1"]` or `r tb["male", "0"]/tb["male", "1"]` to 1 odds in favor of death. Let's round this to `r round(tb["male", "0"]/tb["male", "1"])` to 1 odds.
 
 For women the ratio of survivals to deaths is `r tb["female", "1"]` / `r tb["female", "0"]` or exactly `r tb["female", "1"]/tb["female", "0"]` to 1 odds against death. This is a ten fold change in odds. You have increase the 2 to 1 odds against death by a factor of 2 to get to even (1 to 1) odds and then by a factor of 5 to get to the male odds of death.
 
@@ -60,16 +65,152 @@ oddsratio(ti$sex,ti$survived, rev="rows")
 Logistic regression in R for a simple bivariate case like sex versus survival will produce the same odds ratios that we've seen earlier. You use the glm function in R (glm is short for general linear model, and logistic regression is a special case of the general linear model).
 
 ```{r logistic-model-for-sex}
-m1 <- glm(survived~sex, family=binomial(link=logit), data=ti)
-summary(m1)
+msex <- glm(survived~sex, family=binomial(link=logit), data=ti)
+summary(msex)
 ```
 
-```{r broom}
+The odds ratio doesn't look like an odds ratio. By default, R (like many other statistical pacakges) reports the log odds ratio. You can extract this log odds ratio and exponentiate it to get an odds ratio, but it takes a bit of work to figure out how to extract the log odds ratio.
+
+```{r extract-log-odds-ratio}
+names(msex)
+or <- round(exp(msex$coefficients["sexmale"]), 2)
+print(or)
+```
+
+It gets worse when you need a standard error (e.g., for a confidence interval). You have to look not in the glm object but the summary of the glm object.
+
+```{r extract-standard-errors}
+ssex <- summary(msex)
+names(ssex)
+ssex$coefficients
+mn <- ssex$coefficients["sexmale", "Estimate"]
+se <- ssex$coefficients["sexmale", "Std. Error"]
+conf.limits <- round(exp(mn+c(-1.96,1.96)*se), 2)
+print(conf.limits)
+```
+
+You will find useful functions like coef() and predict() if you search through the help files, but in general, extracting information from a logistic regression model (or any regression model for that matter) is difficult.
+
+There is a "tidyverse" package, broom, written by David Robinson, that makes extraction of these objects a bit easier. The nice thing about broom is that it provides a more or less uniform approach for extracting information that works across a wide variety of models. 
+
+The glance function in broom gives a one line summary of key statistics.
+
+```{r broom-glance}
 library(broom)
-glance(m1)
-tidy(m1)
+glance(msex)
+```
+
+The tidy function gives a tabular summary that, for most statistical models, has one row for each independent variable (plus a row for the intercept, usually).
+
+```{r broom-tidy}
+tidy(msex)
+```
+
+The augment function adds predicted values and/or residuals to a data frame.
+
+```{r broom-augment}
 n <- data.frame(sex=sort(unique(ti$sex)))
 print(n)
-augment(m1, newdata=n)
-augment(m1, newdata=n, type.predict="response")
+augment(msex, newdata=n)
+```
+
+The default predicted value is a log odds, and with a bit of work, you can convert this to a predicted probability. But life is too short for that. Tell broom to convert for you.
+
+```{r broom-augment-transform}
+augment(msex, newdata=n, type.predict="response")
+```
+
+Logistic regression with a continuous independent variable is not much more complicated, though the example you will see in just a minute has a few twists and turns.
+
+Let's plunge ahead and fit a model without looking at any graphs first. The first twist is that some of the ages are missing. The simplest thing to do, though it may not be the best choice, is to remove any row where age is missing.
+
+```{r continuous-model}
+summary(ti$age)
+tj <- ti[is.finite(ti$age), ]
+mage <- glm(survived~age, family=binomial, data=tj)
+tage <- tidy(mage)
+tage$lcl <- exp(tage$estimate-1.96*tage$std.error)
+tage$ucl <- exp(tage$estimate+1.96*tage$std.error)
+tage$estimate <- exp(tage$estimate)
+tage[ , c("term", "estimate", "lcl", "ucl")]
+or <- tage$estimate[tage$term=="age"]
+n <- data.frame(age=1:71)
+page <- augment(mage, newdata=n, type.predict="response")
+print(page)
+plot(page$age, page$.fitted, type="l")
+```
+
+There are so many different values for age, that it is easy to get confused. What is happening, though, is that each year of age causes a slight reduction (`r round(or, 3)`) in the odds of survival. The change is easier to understand if you cumulate it across a decade of life. Each increase of ten years leads to a `r round(or, 3)`^10 or `r round(or^10, 3)` decrease in the odds of survival.
+
+There's a big problem, though. Although there is a slight protective trend in survival in favor of children, the trend does not persist among adults. There are a couple of ways to look at this. First, let's split the data into deciles (ten groups).
+
+```{r deciles}
+library("dplyr")
+age_group <- ntile(tj$age, 10)
+range_label <- function(x) {
+  paste(min(x), "to", max(x))
+}
+table(age_group)
+tapply(tj$age, age_group, mean)
+tapply(tj$age, age_group, range_label)
+tapply(tj$survived, age_group, mean)
+```
+
+You could also split the data into year intervals that are evenly spaced.
+
+```{r eight-year-blocks}
+library("dplyr")
+age_group <- cut(tj$age, breaks=seq(0, 72, by=8))
+range_label <- function(x) {
+  paste(min(x), "to", max(x))
+}
+table(age_group)
+tapply(tj$age, age_group, mean)
+tapply(tj$age, age_group, range_label)
+tapply(tj$survived, age_group, mean)
+```
+
+
+
+Now let's look at a more complex logistic regression model with two factors, sex and passenger class. If you saw the movie, Leonardo and his third class compatriots were locked down until all the first class passengers boarded the life boats. That's not good news on a rapidly sinking ship.
+
+You should look at passenger class by itself before thinking about how it might interact with sex.
+
+```{r passenger-class}
+prop.table(table(ti$pclass, ti$survived), margin=1)
+oddsratio(ti$pclass, ti$survived)
+mclass <- glm(survived~pclass, family=binomial, data=ti)
+tclass <- tidy(mclass)
+tclass$lcl <- round(exp(tclass$estimate-1.96*tclass$std.error), 2)
+tclass$ucl <- round(exp(tclass$estimate+1.96*tclass$std.error), 2)
+tclass$estimate <- round(exp(tclass$estimate), 2)
+tclass[, c("term", "estimate", "lcl", "ucl")]
+n <- data.frame(pclass=sort(unique(ti$pclass)))
+print(n)
+augment(mclass, newdata=n, type.predict="response")
+```
+
+An interaction means that the effect of one independent variable is not the same across the levels of the other independent variable. In the Titanic example, an interaction between sex and passenger class means that the protection afforded to women by a "women and children first" policy is not the same across each passsenger class.
+
+```{r interaction}
+oddsratio(ti$sex[ti$pclass=="1st"], ti$survived[ti$pclass=="1st"], rev="rows")
+oddsratio(ti$sex[ti$pclass=="2nd"], ti$survived[ti$pclass=="2nd"], rev="rows")
+oddsratio(ti$sex[ti$pclass=="3rd"], ti$survived[ti$pclass=="3rd"], rev="rows")
+```
+
+You can see the sex effect is in the double digits for first and second class, but much smaller in third class.
+
+```{r logistic-interaction}
+mint <- glm(survived~pclass*sex, family=binomial, data=ti)
+tint <- tidy(mint)
+print(tint)
+tint$lcl <- round(exp(tint$estimate-1.96*tint$std.error), 2)
+tint$ucl <- round(exp(tint$estimate+1.96*tint$std.error), 2)
+tint$estimate <- round(exp(tint$estimate), 2)
+tint[, c("term", "estimate", "lcl", "ucl")]
+n1 <- sort(unique(ti$sex))
+n2 <- sort(unique(ti$pclass))
+n <- data.frame(sex=rep(n1, length(n2)), pclass=rep(n2, each=length(n1)))
+print(n)
+augment(mint, newdata=n, type.predict="response")
 ```
