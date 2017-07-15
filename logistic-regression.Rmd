@@ -17,16 +17,17 @@ ti <- read_tsv(f)
 names(ti) %<>% tolower
 head(ti)
 tail(ti)
+ti$status <- ifelse(ti$survived==1, "lived", "died")
 ```
 
 So the very first question you might ask is whether women fared better than men. Here is a simple table.
 
 ```{r titanic-table}
-tb <- table(ti$sex, ti$survived)
+tb <- table(ti$sex, ti$status)
 print(tb)
 ```
 
-This table tells you that `r tb["female", "1"]` women survived, including Kate Winslet and that (spoiler alert!) `r tb["male", "0"]` men died, including, sadly, Leonardo DiCaprio.
+This table tells you that `r tb["female", "lived"]` women survived, including Kate Winslet and that (spoiler alert!) `r tb["male", "died"]` men died, including, sadly, Leonardo DiCaprio.
 
 The raw counts are sometimes difficult to interpret, especially since there were a lot more men than women making the trip from England to America. You can get percentages with the prop.table function. The argument margin=1 gives row percentages.
 
@@ -34,16 +35,17 @@ The raw counts are sometimes difficult to interpret, especially since there were
 prop.table(tb, margin=1)
 ```
 
-Looking at either the raw counts or the percentages, though, you can see that men in general fared worse than women. The ratio of deaths to survivals among men is `r tb["male", "0"]` / `r tb["male", "1"]` or `r tb["male", "0"]/tb["male", "1"]` to 1 odds in favor of death. Let's round this to `r round(tb["male", "0"]/tb["male", "1"])` to 1 odds.
+Looking at either the raw counts or the percentages, though, you can see that men in general fared worse than women. The ratio of deaths to survivals among men is `r tb["male", "died"]` / `r tb["male", "lived"]` or `r tb["male", "died"]/tb["male", "lived"]` to 1 odds in favor of death. Let's round this to `r round(tb["male", "died"]/tb["male", "lived"])` to 1 odds.
 
-For women the ratio of survivals to deaths is `r tb["female", "1"]` / `r tb["female", "0"]` or exactly `r tb["female", "1"]/tb["female", "0"]` to 1 odds against death. This is a ten fold change in odds. You have increase the 2 to 1 odds against death by a factor of 2 to get to even (1 to 1) odds and then by a factor of 5 to get to the male odds of death.
+For women the ratio of survivals to deaths is `r tb["female", "lived"]` / `r tb["female", "died"]` or exactly `r tb["female", "lived"]/tb["female", "died"]` to 1 odds against death. This is a ten fold change in odds. You have increase the 2 to 1 odds against death by a factor of 2 to get to even (1 to 1) odds and then by a factor of 5 to get to the male odds of death.
 
 The ratio of odds is (not too surprisingly) called an odds ratio. The odds ratio is a commonly used measure in statistics, but it is not without a lot of controversy. But if you want to use a logistic regression model, you have to throw your lot in with the odds ratio. There are alternative regression approaches that use a different measure, such as the relative risk, but they are messier and used much less frequently.
 
-There is no function in R that will compute an odds ratio for you, though you could do the calculation yourself. The formula is a crossproduct, ad/bc, where a and d are the two numbers on the diagonal of the two by two table and b and c are the two numbers off the diagonal.
+There is no function in R that will compute an odds ratio for you, though you could do the calculation yourself. It is literally a ratio of odds.
 
 ```{r calculate-odds-ratio}
-or <- (tb[1, 1] * tb[2, 2]) / (tb[1 ,2] * tb[2, 1])
+or <- (tb["female", "lived"] / tb["female", "died"]) / 
+      (tb["male", "lived"]   / tb["male", "died"])
 print(or)
 ```
 
@@ -53,19 +55,19 @@ There are several packages that will calculate an odds ratio for you. One that I
 
 ```{r epitools-odds-ratio}
 library(epitools)
-oddsratio(ti$sex, ti$survived)
+oddsratio(ti$sex, ti$status)
 ```
 
 Notice that epitools, by default, selected the "wrong" odds ratio. This is because the default in R is to order the rows and columns of a table alphabetically, and that puts females in the first row and as a result their odds are in the numerator. You can fix this easily.
 
 ```{r epitools-odds-ratio-reversed}
-oddsratio(ti$sex,ti$survived, rev="rows")
+oddsratio(ti$sex,ti$status, rev="columns")
 ```
 
 Logistic regression in R for a simple bivariate case like sex versus survival will produce the same odds ratios that we've seen earlier. You use the glm function in R (glm is short for general linear model, and logistic regression is a special case of the general linear model).
 
 ```{r logistic-model-for-sex}
-msex <- glm(survived~sex, family=binomial(link=logit), data=ti)
+msex <- glm((status=="died")~(sex=="female"), family=binomial(link=logit), data=ti)
 summary(msex)
 ```
 
@@ -73,7 +75,8 @@ The odds ratio doesn't look like an odds ratio. By default, R (like many other s
 
 ```{r extract-log-odds-ratio}
 names(msex)
-or <- round(exp(msex$coefficients["sexmale"]), 2)
+f <- "sex == \"female\"TRUE"
+or <- round(exp(msex$coefficients[f]), 2)
 print(or)
 ```
 
@@ -83,8 +86,8 @@ It gets worse when you need a standard error (e.g., for a confidence interval). 
 ssex <- summary(msex)
 names(ssex)
 ssex$coefficients
-mn <- ssex$coefficients["sexmale", "Estimate"]
-se <- ssex$coefficients["sexmale", "Std. Error"]
+mn <- ssex$coefficients[f, "Estimate"]
+se <- ssex$coefficients[f, "Std. Error"]
 conf.limits <- round(exp(mn+c(-1.96,1.96)*se), 2)
 print(conf.limits)
 ```
@@ -127,7 +130,7 @@ Let's plunge ahead and fit a model without looking at any graphs first. The firs
 ```{r continuous-model}
 summary(ti$age)
 tj <- ti[is.finite(ti$age), ]
-mage <- glm(survived~age, family=binomial, data=tj)
+mage <- glm(status~age, family=binomial, data=tj)
 tage <- tidy(mage)
 tage$lcl <- exp(tage$estimate-1.96*tage$std.error)
 tage$ucl <- exp(tage$estimate+1.96*tage$std.error)
@@ -153,7 +156,7 @@ range_label <- function(x) {
 table(age_group)
 tapply(tj$age, age_group, mean)
 tapply(tj$age, age_group, range_label)
-tapply(tj$survived, age_group, mean)
+tapply(tj$status, age_group, mean)
 ```
 
 You could also split the data into year intervals that are evenly spaced.
@@ -167,7 +170,7 @@ range_label <- function(x) {
 table(age_group)
 tapply(tj$age, age_group, mean)
 tapply(tj$age, age_group, range_label)
-tapply(tj$survived, age_group, mean)
+tapply(tj$status, age_group, mean)
 ```
 
 
@@ -177,9 +180,9 @@ Now let's look at a more complex logistic regression model with two factors, sex
 You should look at passenger class by itself before thinking about how it might interact with sex.
 
 ```{r passenger-class}
-prop.table(table(ti$pclass, ti$survived), margin=1)
-oddsratio(ti$pclass, ti$survived)
-mclass <- glm(survived~pclass, family=binomial, data=ti)
+prop.table(table(ti$pclass, ti$status), margin=1)
+oddsratio(ti$pclass, ti$status)
+mclass <- glm(status~pclass, family=binomial, data=ti)
 tclass <- tidy(mclass)
 tclass$lcl <- round(exp(tclass$estimate-1.96*tclass$std.error), 2)
 tclass$ucl <- round(exp(tclass$estimate+1.96*tclass$std.error), 2)
@@ -193,15 +196,15 @@ augment(mclass, newdata=n, type.predict="response")
 An interaction means that the effect of one independent variable is not the same across the levels of the other independent variable. In the Titanic example, an interaction between sex and passenger class means that the protection afforded to women by a "women and children first" policy is not the same across each passsenger class.
 
 ```{r interaction}
-oddsratio(ti$sex[ti$pclass=="1st"], ti$survived[ti$pclass=="1st"], rev="rows")
-oddsratio(ti$sex[ti$pclass=="2nd"], ti$survived[ti$pclass=="2nd"], rev="rows")
-oddsratio(ti$sex[ti$pclass=="3rd"], ti$survived[ti$pclass=="3rd"], rev="rows")
+oddsratio(ti$sex[ti$pclass=="1st"], ti$status[ti$pclass=="1st"], rev="rows")
+oddsratio(ti$sex[ti$pclass=="2nd"], ti$status[ti$pclass=="2nd"], rev="rows")
+oddsratio(ti$sex[ti$pclass=="3rd"], ti$status[ti$pclass=="3rd"], rev="rows")
 ```
 
 You can see the sex effect is in the double digits for first and second class, but much smaller in third class.
 
 ```{r logistic-interaction}
-mint <- glm(survived~pclass*sex, family=binomial, data=ti)
+mint <- glm(status~pclass*sex, family=binomial, data=ti)
 tint <- tidy(mint)
 print(tint)
 tint$lcl <- round(exp(tint$estimate-1.96*tint$std.error), 2)
@@ -213,4 +216,10 @@ n2 <- sort(unique(ti$pclass))
 n <- data.frame(sex=rep(n1, length(n2)), pclass=rep(n2, each=length(n1)))
 print(n)
 augment(mint, newdata=n, type.predict="response")
+```
+
+Save everything for possible later use.
+
+```{r save}
+save.image("logistic-regression.RData")
 ```

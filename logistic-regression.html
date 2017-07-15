@@ -161,37 +161,39 @@ head(ti)</code></pre>
 ## 4       Zenni, Mr Philip    3rd    22   male        0
 ## 5       Lievens, Mr Rene    3rd    24   male        0
 ## 6         Zimmerman, Leo    3rd    29   male        0</code></pre>
+<pre class="r"><code>ti$status &lt;- ifelse(ti$survived==1, &quot;lived&quot;, &quot;died&quot;)</code></pre>
 <p>So the very first question you might ask is whether women fared better than men. Here is a simple table.</p>
-<pre class="r"><code>tb &lt;- table(ti$sex, ti$survived)
+<pre class="r"><code>tb &lt;- table(ti$sex, ti$status)
 print(tb)</code></pre>
 <pre><code>##         
-##            0   1
-##   female 154 308
-##   male   709 142</code></pre>
+##          died lived
+##   female  154   308
+##   male    709   142</code></pre>
 <p>This table tells you that 308 women survived, including Kate Winslet and that (spoiler alert!) 709 men died, including, sadly, Leonardo DiCaprio.</p>
 <p>The raw counts are sometimes difficult to interpret, especially since there were a lot more men than women making the trip from England to America. You can get percentages with the prop.table function. The argument margin=1 gives row percentages.</p>
 <pre class="r"><code>prop.table(tb, margin=1)</code></pre>
 <pre><code>##         
-##                  0         1
+##               died     lived
 ##   female 0.3333333 0.6666667
 ##   male   0.8331375 0.1668625</code></pre>
 <p>Looking at either the raw counts or the percentages, though, you can see that men in general fared worse than women. The ratio of deaths to survivals among men is 709 / 142 or 4.9929577 to 1 odds in favor of death. Let’s round this to 5 to 1 odds.</p>
 <p>For women the ratio of survivals to deaths is 308 / 154 or exactly 2 to 1 odds against death. This is a ten fold change in odds. You have increase the 2 to 1 odds against death by a factor of 2 to get to even (1 to 1) odds and then by a factor of 5 to get to the male odds of death.</p>
 <p>The ratio of odds is (not too surprisingly) called an odds ratio. The odds ratio is a commonly used measure in statistics, but it is not without a lot of controversy. But if you want to use a logistic regression model, you have to throw your lot in with the odds ratio. There are alternative regression approaches that use a different measure, such as the relative risk, but they are messier and used much less frequently.</p>
-<p>There is no function in R that will compute an odds ratio for you, though you could do the calculation yourself. The formula is a crossproduct, ad/bc, where a and d are the two numbers on the diagonal of the two by two table and b and c are the two numbers off the diagonal.</p>
-<pre class="r"><code>or &lt;- (tb[1, 1] * tb[2, 2]) / (tb[1 ,2] * tb[2, 1])
+<p>There is no function in R that will compute an odds ratio for you, though you could do the calculation yourself. It is literally a ratio of odds.</p>
+<pre class="r"><code>or &lt;- (tb[&quot;female&quot;, &quot;lived&quot;] / tb[&quot;female&quot;, &quot;died&quot;]) / 
+      (tb[&quot;male&quot;, &quot;lived&quot;]   / tb[&quot;male&quot;, &quot;died&quot;])
 print(or)</code></pre>
-<pre><code>## [1] 0.100141</code></pre>
+<pre><code>## [1] 9.985915</code></pre>
 <p>Oops! I calculated an odds ratio of 10 earlier, but now it looks like the odds ratio is 0.1 instead. What happened? Well, the odds ratio depends on whether you put the odds associated with females in the numerator or the denominator and whether you use to the odds for death or the odds against death. You just have to get used to this, and start thinking that 1/10 and 10 are effectively the same odds ratio. Saying that men have 10 times the risk of dying than women is not any different than saying that women have 1/10 the risk of dying than men.</p>
 <p>There are several packages that will calculate an odds ratio for you. One that I like is epitools.</p>
 <pre class="r"><code>library(epitools)
-oddsratio(ti$sex, ti$survived)</code></pre>
+oddsratio(ti$sex, ti$status)</code></pre>
 <pre><code>## $data
 ##          Outcome
-## Predictor   0   1 Total
-##    female 154 308   462
-##    male   709 142   851
-##    Total  863 450  1313
+## Predictor died lived Total
+##    female  154   308   462
+##    male    709   142   851
+##    Total   863   450  1313
 ## 
 ## $measure
 ##          odds ratio with 95% C.I.
@@ -211,13 +213,13 @@ oddsratio(ti$sex, ti$survived)</code></pre>
 ## attr(,&quot;method&quot;)
 ## [1] &quot;median-unbiased estimate &amp; mid-p exact CI&quot;</code></pre>
 <p>Notice that epitools, by default, selected the “wrong” odds ratio. This is because the default in R is to order the rows and columns of a table alphabetically, and that puts females in the first row and as a result their odds are in the numerator. You can fix this easily.</p>
-<pre class="r"><code>oddsratio(ti$sex,ti$survived, rev=&quot;rows&quot;)</code></pre>
+<pre class="r"><code>oddsratio(ti$sex,ti$status, rev=&quot;rows&quot;)</code></pre>
 <pre><code>## $data
 ##          Outcome
-## Predictor   0   1 Total
-##    male   709 142   851
-##    female 154 308   462
-##    Total  863 450  1313
+## Predictor died lived Total
+##    male    709   142   851
+##    female  154   308   462
+##    Total   863   450  1313
 ## 
 ## $measure
 ##          odds ratio with 95% C.I.
@@ -648,6 +650,8 @@ print(n)</code></pre>
 ## 4   male    2nd 0.1445087 0.02673202
 ## 5 female    3rd 0.3773585 0.03329110
 ## 6   male    3rd 0.1162325 0.01434771</code></pre>
+<p>Save everything for possible later use.</p>
+<pre class="r"><code>save.image(&quot;logistic-regression.RData&quot;)</code></pre>
 
 
 
