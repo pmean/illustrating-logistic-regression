@@ -32,7 +32,9 @@ This table tells you that `r tb["female", "lived"]` women survived, including Ka
 The raw counts are sometimes difficult to interpret, especially since there were a lot more men than women making the trip from England to America. You can get percentages with the prop.table function. The argument margin=1 gives row percentages.
 
 ```{r proportions}
-prop.table(tb, margin=1)
+p <- prop.table(tb, margin=1)
+p
+barplot(height=p[ , "died"], names.arg=rownames(p), ylim=c(0, 1))
 ```
 
 Looking at either the raw counts or the percentages, though, you can see that men in general fared worse than women. The ratio of deaths to survivals among men is `r tb["male", "died"]` / `r tb["male", "lived"]` or `r tb["male", "died"]/tb["male", "lived"]` to 1 odds in favor of death. Let's round this to `r round(tb["male", "died"]/tb["male", "lived"])` to 1 odds.
@@ -130,7 +132,7 @@ Let's plunge ahead and fit a model without looking at any graphs first. The firs
 ```{r continuous-model}
 summary(ti$age)
 tj <- ti[is.finite(ti$age), ]
-mage <- glm(status~age, family=binomial, data=tj)
+mage <- glm(survived~age, family=binomial, data=tj)
 tage <- tidy(mage)
 tage$lcl <- exp(tage$estimate-1.96*tage$std.error)
 tage$ucl <- exp(tage$estimate+1.96*tage$std.error)
@@ -140,7 +142,7 @@ or <- tage$estimate[tage$term=="age"]
 n <- data.frame(age=1:71)
 page <- augment(mage, newdata=n, type.predict="response")
 print(page)
-plot(page$age, page$.fitted, type="l")
+plot(page$age, page$.fitted, type="l", ylim=c(0, 1))
 ```
 
 There are so many different values for age, that it is easy to get confused. What is happening, though, is that each year of age causes a slight reduction (`r round(or, 3)`) in the odds of survival. The change is easier to understand if you cumulate it across a decade of life. Each increase of ten years leads to a `r round(or, 3)`^10 or `r round(or^10, 3)` decrease in the odds of survival.
@@ -154,9 +156,12 @@ range_label <- function(x) {
   paste(min(x), "to", max(x))
 }
 table(age_group)
-tapply(tj$age, age_group, mean)
-tapply(tj$age, age_group, range_label)
-tapply(tj$status, age_group, mean)
+decile_ages <- tapply(tj$age, age_group, mean)
+decile_ranges <- tapply(tj$age, age_group, range_label)
+decile_survival <- tapply(tj$survived, age_group, mean)
+cbind(decile_ranges, decile_ages, decile_survival)
+plot(decile_ages, decile_survival)
+
 ```
 
 You could also split the data into year intervals that are evenly spaced.
@@ -168,9 +173,11 @@ range_label <- function(x) {
   paste(min(x), "to", max(x))
 }
 table(age_group)
-tapply(tj$age, age_group, mean)
-tapply(tj$age, age_group, range_label)
-tapply(tj$status, age_group, mean)
+eight_year_ages <- tapply(tj$age, age_group, mean)
+eight_year_ranges <- tapply(tj$age, age_group, range_label)
+eight_year_survival <- tapply(tj$survived, age_group, mean)
+cbind(eight_year_ranges, eight_year_ages, eight_year_survival)
+plot(eight_year_ages, eight_year_survival)
 ```
 
 
@@ -182,7 +189,7 @@ You should look at passenger class by itself before thinking about how it might 
 ```{r passenger-class}
 prop.table(table(ti$pclass, ti$status), margin=1)
 oddsratio(ti$pclass, ti$status)
-mclass <- glm(status~pclass, family=binomial, data=ti)
+mclass <- glm(survived~pclass, family=binomial, data=ti)
 tclass <- tidy(mclass)
 tclass$lcl <- round(exp(tclass$estimate-1.96*tclass$std.error), 2)
 tclass$ucl <- round(exp(tclass$estimate+1.96*tclass$std.error), 2)
@@ -204,7 +211,7 @@ oddsratio(ti$sex[ti$pclass=="3rd"], ti$status[ti$pclass=="3rd"], rev="rows")
 You can see the sex effect is in the double digits for first and second class, but much smaller in third class.
 
 ```{r logistic-interaction}
-mint <- glm(status~pclass*sex, family=binomial, data=ti)
+mint <- glm(survived~pclass*sex, family=binomial, data=ti)
 tint <- tidy(mint)
 print(tint)
 tint$lcl <- round(exp(tint$estimate-1.96*tint$std.error), 2)
